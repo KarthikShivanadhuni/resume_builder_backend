@@ -1,5 +1,6 @@
-const jwt=require("jsonwebtoken");
-exports.generateToeken = (userId,res)=>{
+// const jwt=require("jsonwebtoken");
+import jwt from "jsonwebtoken";
+export const generateToeken = (userId,res)=>{
     const token= jwt.sign({
         userId,
         

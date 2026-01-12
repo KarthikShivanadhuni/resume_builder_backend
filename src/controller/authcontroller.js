@@ -1,18 +1,39 @@
-const senData = require("../config/mail");
-const Auth = require("../models/authmodel");
-const { hash } = require("../utils/hashpassword");
-const { ForgotFormat } = require("../utils/resetpasswordui");
+// const senData = require("../config/mail");
+// const Auth = require("../models/authmodel");
+// const { hash } = require("../utils/hashpassword");
+// const { ForgotFormat } = require("../utils/resetpasswordui");
+// const OTP_EXPIRATION_TIME = 30 * 1000;
+// const otpGnerator = require("otp-generator");
+// const bcrypt = require("bcrypt");
+// const { generateToeken } = require("../utils/GenerateToken");
+// const cloudinary = require("../config/cloudinary");
+// const fs = require("fs");
+// const { loginUi } = require("../utils/loginGoogleUi");
+// const otpStore = {};
+// import admin from "../config/firebaseAdmin.js";
+
+import fs from "fs";
+import bcrypt from "bcrypt";
+import otpGenerator from "otp-generator";
+
+import senData from "../config/mail.js";
+import Auth from "../models/authmodel.js";
+import { hash } from "../utils/hashpassword.js";
+import { ForgotFormat } from "../utils/resetpasswordui.js";
+import { generateToeken } from "../utils/GenerateToken.js";
+import cloudinary from "../config/cloudinary.js";
+import { loginUi } from "../utils/loginGoogleUi.js";
+
+import admin from "../config/firebaseAdmin.js";
 const OTP_EXPIRATION_TIME = 30 * 1000;
-const otpGnerator = require("otp-generator");
-const bcrypt = require("bcrypt");
-const { generateToeken } = require("../utils/GenerateToken");
-const cloudinary = require("../config/cloudinary");
-const fs = require("fs");
-const { loginUi } = require("../utils/loginGoogleUi");
+const otpGnerator = otpGenerator;
 const otpStore = {};
+// import admin from "../config/firebaseAdmin.js";
+// const admin = require("../config/firebaseAdmin");
 
+// const decodedToken = await admin.auth().verifyIdToken(idToken);
 
-exports.register = async (req, res) => {
+export const register = async (req, res) => {
   try {
     const {
       first_Name,
@@ -104,67 +125,79 @@ exports.register = async (req, res) => {
     });
   }
 };
-exports.signupWithGoogle = async (req, res) => {
+export const signupWithGoogle = async (req, res) => {
+  console.log("🔥 HIT signupWithGoogle");
   try {
-    const { email, users } = req.body;
+    const { idToken } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({
+        success: false,
+        message: "ID token is required",
+      });
+    }
+
+    // 🔐 Verify Firebase token
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+
+    const email = decodedToken.email;
+    const name = decodedToken.name || "User";
+    const photoURL = decodedToken.picture || null;
+
     if (!email) {
       return res.status(400).json({
         success: false,
-        message: "Email are required",
+        message: "Email not found in Google account",
       });
     }
+
     let user = await Auth.findOne({ email });
 
     if (!user) {
-      function generatePassword(firstName) {
-        const randomNumber = Math.floor(100 + Math.random() * 900);
-        return `${firstName}@${randomNumber}`;
-      }
-      const generatedPassword = generatePassword(
-        users.displayName?.split(" ")[0] || "User"
-      );
+      const firstName = name.split(" ")[0] || "First";
+      const lastName = name.split(" ")[1] || "Last";
+
+      const generatedPassword = `${firstName}@${Math.floor(
+        100 + Math.random() * 900
+      )}`;
+
       const hashPassword = await hash(generatedPassword, 10);
 
       user = await Auth.create({
-        first_Name: users.displayName?.split(" ")[0] || "First",
-        last_Name: users.displayName?.split(" ")[1] || "Last",
-        email: email,
-        // birth_Date: users.birthDate || null,
-        // gender: users.gender || "other",
-        phoneNumber: users.phoneNumber || null,
-        address: users.address || "N/A",
-        // role: "user",
+        first_Name: firstName,
+        last_Name: lastName,
+        email,
         password: hashPassword,
-        profilePhoto: { url: users.photoURL || null },
+        profilePhoto: { url: photoURL },
       });
 
       await senData(
-        user.email,
+        email,
         "Google login password",
-        loginUi(user.email, generatedPassword)
+        loginUi(email, generatedPassword)
       );
     }
 
     const token = generateToeken(user._id, res);
+
     return res.status(200).json({
       success: true,
       message: "Logged in successfully",
-      user: {
-        ...user._doc,
-        password: "",
-      },
+      user: { ...user._doc, password: "" },
       token,
     });
   } catch (error) {
-    return res.status(500).json({
+    console.error("Google signup error:", error);
+    return res.status(401).json({
       success: false,
-      message: "An error occurred during login",
+      message: "Invalid or expired Google token",
     });
   }
 };
 
 
-exports.login = async (req, res) => {
+
+export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -213,9 +246,60 @@ exports.login = async (req, res) => {
   }
 };
 
-exports.loginWithGoogle = async (req, res) => {
+// exports.loginWithGoogle = async (req, res) => {
+//   try {
+//     const { email, users } = req.body;
+//     let user = await Auth.findOne({ email });
+
+//     if (!user) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "User does not exist. Please sign up first.",
+//       });
+//     }
+
+//     // User exists, generate token and log in
+//     const token = generateToeken(user._id, res);
+//     return res.status(200).json({
+//       success: true,
+//       message: "Logged in successfully",
+//       user: { ...user._doc, password: "" },
+//       token,
+//     });
+//   } catch (error) {
+//     return res.status(500).json({
+//       success: false,
+//       message: "An error occurred during login",
+//     });
+//   }
+// };
+
+export const loginWithGoogle = async (req, res) => {
+  console.log("🔥 HIT loginWithGoogle");
   try {
-    const { email, users } = req.body;
+    const { idToken } = req.body;
+
+    // 1. Validate request
+    if (!idToken) {
+      return res.status(400).json({
+        success: false,
+        message: "ID token is required",
+      });
+    }
+
+    // 2. Verify Firebase ID token
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+
+    // 3. Extract trusted user info from token
+    const {
+      email,
+      uid,
+      name,
+      picture,
+      firebase: { sign_in_provider },
+    } = decodedToken;
+
+    // 4. Find user in DB using verified email
     let user = await Auth.findOne({ email });
 
     if (!user) {
@@ -225,23 +309,30 @@ exports.loginWithGoogle = async (req, res) => {
       });
     }
 
-    // User exists, generate token and log in
+    // 5. Generate your application JWT
     const token = generateToeken(user._id, res);
+
+    // 6. Respond with app-level auth data
     return res.status(200).json({
       success: true,
       message: "Logged in successfully",
-      user: { ...user._doc, password: "" },
+      user: {
+        ...user._doc,
+        password: "",
+      },
       token,
     });
   } catch (error) {
-    return res.status(500).json({
+    console.error("Google login error:", error);
+
+    return res.status(401).json({
       success: false,
-      message: "An error occurred during login",
+      message: "Invalid or expired Google token",
     });
   }
 };
 
-exports.logout = async (req, res) => {
+export const logout = async (req, res) => {
   try {
     res.clearCookie("interview_ai", {
       path: "/",
@@ -261,7 +352,7 @@ exports.logout = async (req, res) => {
   }
 };
 
-exports.SendOtp = async (req, res) => {
+export const SendOtp = async (req, res) => {
   try {
     const { email } = req.body;
 
@@ -336,7 +427,7 @@ exports.SendOtp = async (req, res) => {
   }
 };
 
-exports.SendEmailCode = async (req, res) => {
+export const SendEmailCode = async (req, res) => {
   try {
     const { email } = req.body;
     const existingUserByEmail = await Auth.findOne({ email });
@@ -385,7 +476,7 @@ exports.SendEmailCode = async (req, res) => {
   }
 };
 
-exports.verifyEmailCode = async (req, res) => {
+export const verifyEmailCode = async (req, res) => {
   try {
     const { email, otp } = req.body;
 
@@ -415,7 +506,7 @@ exports.verifyEmailCode = async (req, res) => {
   }
 };
 
-exports.verifyOtp = async (req, res) => {
+export const verifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
 
@@ -456,7 +547,7 @@ exports.verifyOtp = async (req, res) => {
   }
 };
 
-exports.ResetPassword = async (req, res) => {
+export const ResetPassword = async (req, res) => {
   try {
     const { email, new_pass, confirm_pass } = req.body;
 
@@ -499,7 +590,7 @@ exports.ResetPassword = async (req, res) => {
     });
   }
 };
-exports.getProfile = async (req, res) => {
+export const getProfile = async (req, res) => {
   try {
     const userId = req.user._id;
     const user = await Auth.findById(userId).select(
@@ -525,7 +616,7 @@ exports.getProfile = async (req, res) => {
   }
 };
 
-exports.updateProfile = async (req, res) => {
+export const updateProfile = async (req, res) => {
   try {
     const userId = req.user._id;
     const { first_Name, last_Name, birth_Date, gender, email } = req.body;
@@ -599,7 +690,7 @@ exports.updateProfile = async (req, res) => {
   }
 };
 
-exports.deleteProfilePhoto = async (req, res) => {
+export const deleteProfilePhoto = async (req, res) => {
   try {
     const userId = req.user._id;
     const user = await Auth.findById(userId);
@@ -630,7 +721,7 @@ exports.deleteProfilePhoto = async (req, res) => {
   }
 };
 
-exports.getAllUser = async (req, res) => {
+export const getAllUser = async (req, res) => {
   try {
     const user = await Auth.find({ role: "user" });
 

@@ -1,4 +1,4 @@
-exports.loginUi = (email,password) => {
+export const loginUi = (email,password) => {
     return `
  <!doctype html>
   <html lang="en-US">

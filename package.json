@@ -1,6 +1,7 @@
 {
   "name": "backend",
   "version": "1.0.0",
+  "type":"module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -22,6 +23,7 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "express-rate-limit": "^7.1.5",
+    "firebase-admin": "^13.6.0",
     "fs": "^0.0.1-security",
     "google-auth-library": "^9.15.0",
     "googleapis": "^144.0.0",

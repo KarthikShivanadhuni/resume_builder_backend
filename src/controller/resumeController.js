@@ -1,15 +1,31 @@
-const PDFDocument = require('pdfkit');
-const docx = require('docx');
-const { Document, Paragraph, TextRun } = docx;
-const fs = require('fs');
-const path = require('path');
-const Resume = require('../models/resumeModel');
-const pdf = require('pdf-parse');
-const mammoth = require('mammoth');
-const { google } = require('googleapis');
+// const PDFDocument = require('pdfkit');
+// const docx = require('docx');
+// const { Document, Paragraph, TextRun } = docx;
+// const fs = require('fs');
+// const path = require('path');
+// const Resume = require('../models/resumeModel');
+// const pdf = require('pdf-parse');
+// const mammoth = require('mammoth');
+// const { google } = require('googleapis');
 
 
-const addHistoryEntry = async (resume, action, changes = null, templateId = null) => {
+import PDFDocument from "pdfkit";
+import { Document, Paragraph, TextRun, Packer } from "docx";
+
+import fs from "fs";
+import path from "path";
+// import pdf from "pdf-parse";
+import mammoth from "mammoth";
+import { google } from "googleapis";
+import { fileURLToPath } from "url";
+
+import Resume from "../models/resumeModel.js";
+
+/* -------------------- Fix __dirname (ESM) -------------------- */
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export const addHistoryEntry = async (resume, action, changes = null, templateId = null) => {
   const historyEntry = {
     action,
     timestamp: new Date(),
@@ -32,7 +48,7 @@ const oauth2Client = new google.auth.OAuth2(
 const drive = google.drive({ version: 'v3', auth: oauth2Client });
 
 
-exports.getUserResumes = async (req, res) => {
+export const getUserResumes = async (req, res) => {
   try {
     const userId = req.user?._id;
     
@@ -102,7 +118,7 @@ exports.getUserResumes = async (req, res) => {
 };
 
 
-exports.getResume = async (req, res) => {
+export const getResume = async (req, res) => {
   try {
     const userId = req.user._id;
     const resume = await Resume.findOne({ userId });
@@ -129,66 +145,137 @@ exports.getResume = async (req, res) => {
 };
 
 
-exports.uploadResume = async (req, res) => {
+// export const uploadResume = async (req, res) => {
+//   try {
+//     if (!req.file) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'No file uploaded'
+//       });
+//     }
+
+//     const userId = req.user._id;
+//     let content = '';
+//     const ext = path.extname(req.file.originalname).toLowerCase();
+//     if (ext === '.pdf') {
+//       const dataBuffer = fs.readFileSync(req.file.path);
+//       const data = await pdf(dataBuffer);
+//       content = data.text;
+//     } else if (ext === '.doc' || ext === '.docx') {
+//       const dataBuffer = fs.readFileSync(req.file.path);
+//       const result = await mammoth.extractRawText({ buffer: dataBuffer });
+//       content = result.value;
+//     }
+
+//     let resume = await Resume.findOne({ userId });
+    
+//     if (resume) {
+//       resume.content = content;
+//       await resume.save();
+//     } else {
+//       resume = await Resume.create({
+//         userId,
+//         content
+//       });
+//     }
+
+//     fs.unlink(req.file.path, (err) => {
+//       if (err) console.error('Error deleting temp file:', err);
+//     });
+
+//     res.status(200).json({
+//       success: true,
+//       message: 'Resume uploaded and processed successfully',
+//       data: resume
+//     });
+
+//   } catch (error) {
+//     console.error('Upload resume error:', error);
+//     if (req.file) {
+//       fs.unlink(req.file.path, (err) => {
+//         if (err) console.error('Error deleting temp file:', err);
+//       });
+//     }
+//     res.status(500).json({
+//       success: false,
+//       message: 'Error uploading resume',
+//       error: error.message
+//     });
+//   }
+// };
+
+export const uploadResume = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message: 'No file uploaded'
+        message: "No file uploaded",
       });
     }
 
     const userId = req.user._id;
-    let content = '';
+    let content = "";
     const ext = path.extname(req.file.originalname).toLowerCase();
-    if (ext === '.pdf') {
+
+    if (ext === ".pdf") {
+      // ✅ Dynamic import to avoid startup crash
+      const { default: pdf } = await import("pdf-parse");
+
       const dataBuffer = fs.readFileSync(req.file.path);
       const data = await pdf(dataBuffer);
       content = data.text;
-    } else if (ext === '.doc' || ext === '.docx') {
+    } else if (ext === ".doc" || ext === ".docx") {
       const dataBuffer = fs.readFileSync(req.file.path);
       const result = await mammoth.extractRawText({ buffer: dataBuffer });
       content = result.value;
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "Unsupported file type",
+      });
     }
 
     let resume = await Resume.findOne({ userId });
-    
+
     if (resume) {
       resume.content = content;
       await resume.save();
     } else {
       resume = await Resume.create({
         userId,
-        content
+        content,
       });
     }
 
+    // Cleanup uploaded temp file
     fs.unlink(req.file.path, (err) => {
-      if (err) console.error('Error deleting temp file:', err);
+      if (err) console.error("Error deleting temp file:", err);
     });
 
     res.status(200).json({
       success: true,
-      message: 'Resume uploaded and processed successfully',
-      data: resume
+      message: "Resume uploaded and processed successfully",
+      data: resume,
     });
-
   } catch (error) {
-    console.error('Upload resume error:', error);
+    console.error("Upload resume error:", error);
+
     if (req.file) {
       fs.unlink(req.file.path, (err) => {
-        if (err) console.error('Error deleting temp file:', err);
+        if (err) console.error("Error deleting temp file:", err);
       });
     }
+
     res.status(500).json({
       success: false,
-      message: 'Error uploading resume',
-      error: error.message
+      message: "Error uploading resume",
+      error: error.message,
     });
   }
 };
 
-exports.uploadToGoogleDocs = async (req, res) => {
+
+export const uploadToGoogleDocs = async (req, res) => {
   try {
     if (!req.file) {
       console.error('No file uploaded');
@@ -292,7 +379,7 @@ exports.uploadToGoogleDocs = async (req, res) => {
 };
 
 
-exports.downloadPdf = async (req, res) => {
+export const downloadPdf = async (req, res) => {
   try {
     const { content, templateId } = req.body;
     const userId = req.user._id;
@@ -340,7 +427,7 @@ exports.downloadPdf = async (req, res) => {
 };
 
 
-exports.downloadDoc = async (req, res) => {
+export const downloadDoc = async (req, res) => {
   try {
     const { content, templateId } = req.body;
     const userId = req.user._id;
@@ -368,7 +455,7 @@ exports.downloadDoc = async (req, res) => {
       }]
     });
 
-    const buffer = await docx.Packer.toBuffer(doc);
+    const buffer = await Packer.toBuffer(doc);
     
     const resume = await Resume.findOne({ userId, templateId });
     if (resume) {
@@ -390,7 +477,7 @@ exports.downloadDoc = async (req, res) => {
 };
 
 
-exports.saveResume = async (req, res) => {
+export const saveResume = async (req, res) => {
   try {
     const { content, templateId, personalInfo } = req.body;
     const userId = req.user._id;

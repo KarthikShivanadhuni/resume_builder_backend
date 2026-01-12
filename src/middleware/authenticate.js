@@ -1,7 +1,7 @@
-const Auth = require("../models/authmodel");
-const jwt=require("jsonwebtoken");
+import jwt from "jsonwebtoken";
+import Auth from "../models/authmodel.js";
 
-exports.auth = async (req, res, next) => {
+export const auth = async (req, res, next) => {
     try {
       
       const token = req.cookies['interview_ai'] || req.headers.authorization?.split(' ')[1];
@@ -29,7 +29,7 @@ exports.auth = async (req, res, next) => {
   };
 
 
-  exports.IsRecruiter = (req, res, next) => {
+  export const IsRecruiter = (req, res, next) => {
       
     if (!req.user) {
       return res.status(401).json({ success: false, message: "Unauthorized, no user found" });

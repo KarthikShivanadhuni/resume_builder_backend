@@ -1,4 +1,5 @@
-const bcrypt=require("bcryptjs")
-exports.compare =async (password,comparepassword) =>{
+// const bcrypt=require("bcryptjs")
+import bcrypt from "bcryptjs";
+export const compare =async (password,comparepassword) =>{
     return await bcrypt.compare(password,comparepassword);
 }

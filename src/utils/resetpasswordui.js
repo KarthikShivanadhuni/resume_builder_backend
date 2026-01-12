@@ -1,4 +1,4 @@
-exports.ForgotFormat = (email,otp) => {
+export const ForgotFormat = (email,otp) => {
     return `
   <!doctype html>
   <html lang="en-US">
